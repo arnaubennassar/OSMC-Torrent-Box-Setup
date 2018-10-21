@@ -14,7 +14,7 @@ import netifaces as ni
 unrar_pkg = 'unrar_5.2.6-1_armhf.deb'
 unrar_url = 'http://sourceforge.net/projects/bananapi/files/' + unrar_pkg
 
-sr_repo = 'https://github.com/SickRage/SickRage.git'
+sr_repo = 'https://github.com/SickChill/SickChill.git'
 sr_path = '/opt/sickrage'
 sr_service_content = """[Unit]
 Description=Sickrage daemon
@@ -99,6 +99,8 @@ def main():
 						if p.returncode == 0:
 							print 'Drive mounted!'
 							print '---------------------'
+					os.system("mkdir "+media_path+"/DOWNLOADS")
+					os.system("mkdir "+media_path+"/incomplete_downloads")
 				else: print 'Mounting aborted.'
 			else: print 'Error: UUID provided is not valid. Mounting aborted.'
 
@@ -109,6 +111,7 @@ def main():
 	install_spotify = raw_input("Do you want to install SPOTIFY (Y/N) ? ")
 	install_plex = raw_input("Do you want to install PLEX (Y/N) ? ")
 	install_pi_hole = raw_input("Do you want to install PI-HOLE (Y/N) ? ")
+	change_password = raw_input("Do you want to change password after instalations (Y/N) ? ")
 
 	p = subprocess.Popen(['sudo', 'apt-get', 'update'])
 	p.wait()
@@ -116,17 +119,19 @@ def main():
 		if install_transmission.strip() in ['y', 'Y', 'yes', 'Yes', 'YES']:
 			tr_usr_input = raw_input("Enter Transmission username (Default: 'osmc') : ")
 			tr_pwd_input = raw_input("Enter Transmission password (Default: 'osmc') : ")
-			download_dir_input = raw_input("Enter download dir absolute path (Default: /home/osmc/Downloads): ")
-			incomplete_dir_input = raw_input("Enter incomplete dir absolute path (Default: /home/osmc/Incomplete): ")
+			download_dir = media_path+"/DOWNLOADS"
+			incomplete_dir = media_path+"/incomplete_downloads"
+			# download_dir_input = raw_input("Enter download dir absolute path (Default: /home/osmc/Downloads): ")
+			# incomplete_dir_input = raw_input("Enter incomplete dir absolute path (Default: /home/osmc/Incomplete): ")
 
 			if len(tr_usr_input.strip()) > 1:
 				tr_usr = tr_usr_input
 			if len(tr_pwd_input.strip()) > 1:
 				tr_pwd = tr_pwd_input
-			if len(download_dir_input.strip()) > 1:
-				download_dir = download_dir_input
-			if len(incomplete_dir_input.strip()) > 1:
-				incomplete_dir = incomplete_dir_input
+			# if len(download_dir_input.strip()) > 1:
+			# 	download_dir = download_dir_input
+			# if len(incomplete_dir_input.strip()) > 1:
+			# 	incomplete_dir = incomplete_dir_input
 
 			if do_transmission(tr_usr, tr_pwd, download_dir, incomplete_dir):
 				print 'Transmission installed!'
@@ -137,23 +142,30 @@ def main():
 				spotify_name = spotify_name_input
 
 			if do_spotify(spotify_name):
+				# print bg.blue + 'Spotify installed!' + bg.rs
 				print 'Spotify installed!'
 		if install_plex.strip() in ['y', 'Y', 'yes', 'Yes', 'YES']:
 			if do_plex():
+				# print bg.blue + 'Plex installed!' + bg.rs
 				print 'PLEX installed!'
 		if install_pi_hole.strip() in ['y', 'Y', 'yes', 'Yes', 'YES']:
 			if do_pi_hole():
+				# print bg.blue + 'PI-HOLE installed!' + bg.rs
 				print 'pi-hole installed!'
 		if install_sickrage.strip() in ['y', 'Y', 'yes', 'Yes', 'YES']:
 			if do_sickrage(unrar_url, unrar_pkg, sr_repo, sr_path):
+				# print bg.blue + 'Sick SickRage installed!' + bg.rs
 				print 'SickRage installed!'
 		if install_couchpotato.strip() in ['y', 'Y', 'yes', 'Yes', 'YES']:
 			if do_couchpotato(cp_repo, cp_path):
+				# print bg.blue + 'Couch Potato installed!' + bg.rs
 				print 'CouchPotato installed!'
 		if install_mysql.strip() in ['y', 'Y', 'yes', 'Yes', 'YES']:
 			if do_mysql():
 				print 'MySql installed!'
 			else: print 'Error during MySql configuration'
+		if change_password in ['y', 'Y', 'yes', 'Yes', 'YES']:
+			os.system("passwd")
 		print 'Installation complete!'
 
 def create_dir(path):
@@ -216,84 +228,133 @@ def get_fs_type(mypath):
 '''
 
 def do_transmission(username, password, download, incomplete):
-	p = subprocess.Popen(['sudo', 'apt-get', 'install', 'transmission-daemon', '-y'])
-	p.wait()
-	if p.returncode == 0:
-		p2 = subprocess.Popen(['sudo', '/etc/init.d/transmission-daemon', 'stop'])
-		p2.wait()
-		if p2.returncode == 0:
-			if validate_path(download):
-				create_dir(download)
-				chown_dir(download, "debian-transmission", "debian-transmission")
-				chmod_dir(download, 511)
-			else: sys.exit("Download path not valid!")
-			if validate_path(incomplete):
-				create_dir(incomplete)
-				chown_dir(incomplete, "debian-transmission", "debian-transmission")
-				chmod_dir(incomplete, 511)
-			else: sys.exit("Incomplete path not valid!")
-			file_path = '/etc/transmission-daemon/settings.json'
-			shutil.copyfile(file_path,file_path + '.orig')
-			subst = '"download-dir": "%s"' % download
-			replace(file_path, '"download-dir": "/var/lib/transmission-daemon/downloads"', subst)
-			subst = '"incomplete-dir": "%s"' % incomplete
-			replace(file_path, '"incomplete-dir": "/var/lib/transmission-daemon/Downloads"', subst)
-			replace(file_path, '"incomplete-dir-enabled": false', '"incomplete-dir-enabled": true')
-			subst = '"rpc-username": "%s"' % username
-			replace(file_path, '"rpc-username": "transmission"', subst)
-			replace(file_path, '"rpc-whitelist-enabled": true', '"rpc-whitelist-enabled": false')
-			subst = '"rpc-password": "%s",' % password
-			replace_regex(file_path, '"rpc-password".*', subst)
-			p3 = subprocess.Popen(['sudo', 'usermod', '-a', '-G', 'osmc', 'debian-transmission'])
-			p3.wait()
-			if p3.returncode == 0:
-				p4 = subprocess.Popen(['sudo', 'chown', 'debian-transmission:debian-transmission', file_path])
-				p4.wait()
-				if p4.returncode == 0:
-					p5 = subprocess.Popen(['sudo', '/etc/init.d/transmission-daemon', 'start'])
-					p5.wait()
-					if p5.returncode == 0:
-						return True
-					else: sys.exit("Error: unable to start transmission daemon")
-				else: sys.exit("Error: unable to chown settings.json")
-			else: sys.exit("Error: unable to add debian-transmission user to group osmc")
-		else: sys.exit("Error: unable to stop transmission service")
-	else: sys.exit("Error: unable to install transmission-daemon")
+	if os.system("transmission-daemon -V") == 0:
+		print("TRANSMISSION ALREADY INSTALLED.")
+		return ''
+	print("FIRST LETS INSTALL TRANSMISSION")
+	os.system("sudo apt-get install transmission-daemon -y")
+	os.system("sudo chmod g+rw "+download)
+	os.system("sudo chgrp -R osmc "+download)
+	os.system("sudo chmod g+rw "+incomplete)
+	os.system("sudo chgrp -R osmc "+incomplete)
+	os.system("sudo usermod -a -G osmc debian-transmission")
+	os.system("sudo /etc/init.d/transmission-daemon start")
+	os.system("sudo /etc/init.d/transmission-daemon stop")
+	config_file = """{
+	\"alt-speed-down\": 50,
+	\"alt-speed-enabled\": false,
+	\"alt-speed-time-begin\": 540,
+	\"alt-speed-time-day\": 127,
+	\"alt-speed-time-enabled\": false,
+	\"alt-speed-time-end\": 1020,
+	\"alt-speed-up\": 50,
+	\"bind-address-ipv4\": \"0.0.0.0\",
+	\"bind-address-ipv6\": \"::\",
+	\"blocklist-enabled\": false,
+	\"blocklist-url\": \"http://www.example.com/blocklist\",
+	\"cache-size-mb\": 10,
+	\"dht-enabled\": true,
+	\"download-dir\": \""""+download+"""\",
+	\"download-limit\": 100,
+	\"download-limit-enabled\": 0,
+	\"download-queue-enabled\": true,
+	\"download-queue-size\": 5,
+	\"encryption\": 1,
+	\"idle-seeding-limit\": 30,
+	\"idle-seeding-limit-enabled\": false,
+	\"incomplete-dir\": \""""+incomplete+"""\",
+	\"incomplete-dir-enabled\": true,
+	\"lpd-enabled\": false,
+	\"max-peers-global\": 200,
+	\"message-level\": 1,
+	\"peer-congestion-algorithm\": \"\",
+	\"peer-id-ttl-hours\": 6,
+	\"peer-limit-global\": 200,
+	\"peer-limit-per-torrent\": 50,
+	\"peer-port\": 51413,
+	\"peer-port-random-high\": 65535,
+	\"peer-port-random-low\": 49152,
+	\"peer-port-random-on-start\": false,
+	\"peer-socket-tos\": \"default\",
+	\"pex-enabled\": true,
+	\"port-forwarding-enabled\": false,
+	\"preallocation\": 2,
+	\"prefetch-enabled\": true,
+	\"queue-stalled-enabled\": true,
+	\"queue-stalled-minutes\": 30,
+	\"ratio-limit\": 2,
+	\"ratio-limit-enabled\": false,
+	\"rename-partial-files\": true,
+	\"rpc-authentication-required\": true,
+	\"rpc-bind-address\": \"0.0.0.0\",
+	\"rpc-enabled\": true,
+	\"rpc-host-whitelist\": \"\",
+	\"rpc-host-whitelist-enabled\": true,
+	\"rpc-password\": \""""+username+"""\",
+	\"rpc-port\": 9091,
+	\"rpc-url\": \"/transmission/\",
+	\"rpc-username\": \""""+password+"""\",
+	\"rpc-whitelist\": \"*.*.*.*\",
+	\"rpc-whitelist-enabled\": true,
+	\"scrape-paused-torrents-enabled\": true,
+	\"script-torrent-done-enabled\": false,
+	\"script-torrent-done-filename\": \"\",
+	\"seed-queue-enabled\": false,
+	\"seed-queue-size\": 10,
+	\"speed-limit-down\": 100,
+	\"speed-limit-down-enabled\": false,
+	\"speed-limit-up\": 100,
+	\"speed-limit-up-enabled\": false,
+	\"start-added-torrents\": true,
+	\"trash-original-torrent-files\": false,
+	\"umask\": 2,
+	\"upload-limit\": 100,
+	\"upload-limit-enabled\": 0,
+	\"upload-slots-per-torrent\": 14,
+	\"utp-enabled\": true
+	}"""
+	with open("tmp_settings.json", 'w+') as new_file:
+		new_file.write(config_file)
+	os.system("sudo mv tmp_settings.json /etc/transmission-daemon/settings.json")
+	os.system("sudo /etc/init.d/transmission-daemon start")
+
+
+	return True
 
 def do_plex():
 	os.system("sudo apt-get install apt-transport-https -y --force-yes")
-    os.system("wget -O - https://dev2day.de/pms/dev2day-pms.gpg.key | sudo apt-key add -")
-    os.system('echo "deb https://dev2day.de/pms/ stretch main" | sudo tee /etc/apt/sources.list.d/pms.list')
-    os.system("sudo apt-get update")
-    os.system("sudo apt-get install -t stretch plexmediaserver-installer -y")
-    return True
+	os.system("wget -O - https://dev2day.de/pms/dev2day-pms.gpg.key | sudo apt-key add -")
+	os.system('echo "deb https://dev2day.de/pms/ stretch main" | sudo tee /etc/apt/sources.list.d/pms.list')
+	os.system("sudo apt-get update")
+	os.system("sudo apt-get install -t stretch plexmediaserver-installer -y")
+	return True
 
 def do_pi_hole():
 	os.system("sudo apt-get install whiptail")
-    os.system("sudo apt-get install iproute2")
-    os.system("sudo curl -sSL https://install.pi-hole.net | sudo bash")
-    return True
+	os.system("sudo apt-get install iproute2")
+	os.system("sudo curl -sSL https://install.pi-hole.net | sudo bash")
+	return True
 
 def do_spotify(spotify_name):
-    if os.system("sudo systemctl status raspotify") == 0:
-        print("SPOTIFY ALREADY INSTALLED.")
-        return ''
-    os.system("sudo apt-get -y install apt-transport-https")
-    os.system("curl -sSL https://dtcooper.github.io/raspotify/key.asc | sudo apt-key add -v -")
-    os.system("echo 'deb https://dtcooper.github.io/raspotify jessie main' | sudo tee /etc/apt/sources.list.d/raspotify.list")
-    os.system("sudo apt-get update")
-    os.system("sudo apt-get install apt-transport-https")
-    os.system("sudo apt-get -y install raspotify")
-    spotify_config = """DEVICE_NAME="""+spotify_name+"""
-    BITRATE="320"
-    #"""
-    with open("tmp_raspotify", 'w+') as new_file:
-        new_file.write(spotify_config)
-    os.system("sudo mv tmp_raspotify /etc/default/raspotify")
-    os.system("sudo systemctl restart raspotify")
-    with open("tmp_raspotify_kodi", 'w+') as new_file:
-        new_file.write("raspotify\\raspotify.service")
-    os.system("sudo mv tmp_raspotify_kodi /etc/osmc/apps.d/spotify-connect")
+	if os.system("sudo systemctl status raspotify") == 0:
+	    print("SPOTIFY ALREADY INSTALLED.")
+	    return ''
+	os.system("sudo apt-get -y install apt-transport-https")
+	os.system("curl -sSL https://dtcooper.github.io/raspotify/key.asc | sudo apt-key add -v -")
+	os.system("echo 'deb https://dtcooper.github.io/raspotify jessie main' | sudo tee /etc/apt/sources.list.d/raspotify.list")
+	os.system("sudo apt-get update")
+	os.system("sudo apt-get install apt-transport-https")
+	os.system("sudo apt-get -y install raspotify")
+	spotify_config = """DEVICE_NAME="""+spotify_name+"""
+	BITRATE="320"
+	#"""
+	with open("tmp_raspotify", 'w+') as new_file:
+	    new_file.write(spotify_config)
+	os.system("sudo mv tmp_raspotify /etc/default/raspotify")
+	os.system("sudo systemctl restart raspotify")
+	with open("tmp_raspotify_kodi", 'w+') as new_file:
+	    new_file.write("raspotify\\raspotify.service")
+	os.system("sudo mv tmp_raspotify_kodi /etc/osmc/apps.d/spotify-connect")
 	return True
 
 def do_sickrage(unrar_url, unrar_pkg, sr_repo, sr_path):

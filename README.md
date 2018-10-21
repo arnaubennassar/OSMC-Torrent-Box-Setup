@@ -6,8 +6,8 @@ Script for Raspberry Pi version of OSMC that installs Transmission, SickRage, Co
 
 USAGE:
 
-1. sudo apt-get install python-mysqldb
-2. sudo apt-get install python-netifaces
-3. sudo apt-get install git
+sudo apt-get install python-mysqldb -y
+sudo apt-get install python-netifaces -y
+sudo apt-get install git -y
 4. git clone https://github.com/marchins/RPi-osmc-auto-setup.git
 5. sudo python setup.py
