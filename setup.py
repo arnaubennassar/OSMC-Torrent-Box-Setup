@@ -63,6 +63,7 @@ def main():
 	incomplete_dir = "/home/osmc/Incomplete"
 	media_dir_base = "/mnt/"
 	media_dir = "media"
+	spotify_name = 'NNSS'
 
 	# if not root...kick out
 	if not os.geteuid()==0:
@@ -105,6 +106,9 @@ def main():
 	install_sickrage = raw_input("Do you want to install SickRage (Y/N) ? ")
 	install_couchpotato = raw_input("Do you want to install CouchPotato (Y/N) ? ")
 	install_mysql = raw_input("Do you want to install MySql (Y/N) ? ")
+	install_spotify = raw_input("Do you want to install SPOTIFY (Y/N) ? ")
+	install_plex = raw_input("Do you want to install PLEX (Y/N) ? ")
+	install_pi_hole = raw_input("Do you want to install PI-HOLE (Y/N) ? ")
 
 	p = subprocess.Popen(['sudo', 'apt-get', 'update'])
 	p.wait()
@@ -126,6 +130,20 @@ def main():
 
 			if do_transmission(tr_usr, tr_pwd, download_dir, incomplete_dir):
 				print 'Transmission installed!'
+		if install_spotify.strip() in ['y', 'Y', 'yes', 'Yes', 'YES']:
+			spotify_name_input = raw_input("Enter Spotify device name (Default: 'NNSS') : ")
+
+			if len(spotify_name_input.strip()) > 1:
+				spotify_name = spotify_name_input
+
+			if do_spotify(spotify_name):
+				print 'Spotify installed!'
+		if install_plex.strip() in ['y', 'Y', 'yes', 'Yes', 'YES']:
+			if do_plex():
+				print 'PLEX installed!'
+		if install_pi_hole.strip() in ['y', 'Y', 'yes', 'Yes', 'YES']:
+			if do_pi_hole():
+				print 'pi-hole installed!'
 		if install_sickrage.strip() in ['y', 'Y', 'yes', 'Yes', 'YES']:
 			if do_sickrage(unrar_url, unrar_pkg, sr_repo, sr_path):
 				print 'SickRage installed!'
@@ -182,7 +200,7 @@ def replace_regex(file_path, pattern, subst):
 
 def validate_path(path):
 	norm_path = os.path.normpath(path)
-	return os.path.isabs(norm_path) 
+	return os.path.isabs(norm_path)
 
 '''
 def get_fs_type(mypath):
@@ -223,7 +241,7 @@ def do_transmission(username, password, download, incomplete):
 			replace(file_path, '"incomplete-dir-enabled": false', '"incomplete-dir-enabled": true')
 			subst = '"rpc-username": "%s"' % username
 			replace(file_path, '"rpc-username": "transmission"', subst)
-			replace(file_path, '"rpc-whitelist-enabled": true', '"rpc-whitelist-enabled": false')		
+			replace(file_path, '"rpc-whitelist-enabled": true', '"rpc-whitelist-enabled": false')
 			subst = '"rpc-password": "%s",' % password
 			replace_regex(file_path, '"rpc-password".*', subst)
 			p3 = subprocess.Popen(['sudo', 'usermod', '-a', '-G', 'osmc', 'debian-transmission'])
@@ -241,6 +259,42 @@ def do_transmission(username, password, download, incomplete):
 			else: sys.exit("Error: unable to add debian-transmission user to group osmc")
 		else: sys.exit("Error: unable to stop transmission service")
 	else: sys.exit("Error: unable to install transmission-daemon")
+
+def do_plex():
+	os.system("sudo apt-get install apt-transport-https -y --force-yes")
+    os.system("wget -O - https://dev2day.de/pms/dev2day-pms.gpg.key | sudo apt-key add -")
+    os.system('echo "deb https://dev2day.de/pms/ stretch main" | sudo tee /etc/apt/sources.list.d/pms.list')
+    os.system("sudo apt-get update")
+    os.system("sudo apt-get install -t stretch plexmediaserver-installer -y")
+    return True
+
+def do_pi_hole():
+	os.system("sudo apt-get install whiptail")
+    os.system("sudo apt-get install iproute2")
+    os.system("sudo curl -sSL https://install.pi-hole.net | sudo bash")
+    return True
+
+def do_spotify(spotify_name):
+    if os.system("sudo systemctl status raspotify") == 0:
+        print("SPOTIFY ALREADY INSTALLED.")
+        return ''
+    os.system("sudo apt-get -y install apt-transport-https")
+    os.system("curl -sSL https://dtcooper.github.io/raspotify/key.asc | sudo apt-key add -v -")
+    os.system("echo 'deb https://dtcooper.github.io/raspotify jessie main' | sudo tee /etc/apt/sources.list.d/raspotify.list")
+    os.system("sudo apt-get update")
+    os.system("sudo apt-get install apt-transport-https")
+    os.system("sudo apt-get -y install raspotify")
+    spotify_config = """DEVICE_NAME="""+spotify_name+"""
+    BITRATE="320"
+    #"""
+    with open("tmp_raspotify", 'w+') as new_file:
+        new_file.write(spotify_config)
+    os.system("sudo mv tmp_raspotify /etc/default/raspotify")
+    os.system("sudo systemctl restart raspotify")
+    with open("tmp_raspotify_kodi", 'w+') as new_file:
+        new_file.write("raspotify\\raspotify.service")
+    os.system("sudo mv tmp_raspotify_kodi /etc/osmc/apps.d/spotify-connect")
+	return True
 
 def do_sickrage(unrar_url, unrar_pkg, sr_repo, sr_path):
 	p = subprocess.Popen(['sudo', 'apt-get', 'install', 'python-cheetah', 'git-core', '-y'])
@@ -288,7 +342,7 @@ def do_sickrage(unrar_url, unrar_pkg, sr_repo, sr_path):
 			else: sys.exit('Error: unable to install unrar')
 		else: sys.exit('Error: unable to install unrar')
 	else: sys.exit('Error: unable to install git-core')
-	
+
 def do_couchpotato(cp_repo, cp_path):
 	p = subprocess.Popen(['sudo', 'git', 'clone', cp_repo, cp_path])
 	p.wait()
@@ -329,7 +383,7 @@ def do_mysql():
 		replace_regex(file_path, 'bind-address', '#bind-address')
 		p = subprocess.Popen(['sudo','service','mysql','restart'])
 		p.wait()
-		if p.returncode == 0:	
+		if p.returncode == 0:
 			print 'MySql service restarted'
 			mysql_pwd = raw_input("Enter mysql password for root user: ")
 			con = MySQLdb.connect('localhost', 'root', mysql_pwd.replace(" ",""))
